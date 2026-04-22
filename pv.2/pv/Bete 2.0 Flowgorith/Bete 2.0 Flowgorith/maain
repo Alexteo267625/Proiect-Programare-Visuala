@@ -1,0 +1,86 @@
+def make_fprg(data, out_file):
+    root = ET.Element("flowgorithm", fileversion="4.2")
+    ET.SubElement(root, "attributes")
+
+    main_func = ET.SubElement(root, "function", name="Main", type="None", variable="")
+    ET.SubElement(main_func, "parameters")
+    main_body = ET.SubElement(main_func, "body")
+
+    # --- 1. COLECTĂM TOATE DEFINIȚIILE (DEFINE) ---
+    # Creăm o "bibliotecă" unde salvăm pașii pentru fiecare bloc personalizat
+    custom_blocks_library = {}
+
+    for target in data["targets"]:
+        blocks = target["blocks"]
+        for b_id, b in blocks.items():
+            if isinstance(b, dict) and b.get("opcode") == "procedures_definition":
+                proto_id = b["inputs"]["custom_block"][1]
+                nume_functie = clean_name(blocks[proto_id]["mutation"]["proccode"].split(" ")[0])
+
+                # Extragem pașii din interiorul Define-ului
+                f_steps, _, _, f_vars, f_lists, _ = parse_blocks(target, blocks, b.get("next"))
+
+                # Salvăm pașii și variabilele găsite în acest Define
+                custom_blocks_library[nume_functie] = {
+                    "steps": f_steps,
+                    "vars": f_vars,
+                    "lists": f_lists
+                }
+
+    # --- 2. FUNCȚIA DE CONSTRUCȚIE XML CU INLINING ---
+    def build_xml(parent, step_list, depth=0):
+        for s in step_list:
+            if s[0] == "assign":
+                ET.SubElement(parent, "assign", variable=s[1], expression=s[2])
+
+            elif s[0] == "call":
+                nume_apel = s[1]
+                # DACĂ funcția există în biblioteca noastră, o "INLINUIM" (o înlocuim cu codul ei)
+                if nume_apel in custom_blocks_library:
+                    # Inserăm pașii direct aici, în loc de un bloc Call
+                    build_xml(parent, custom_blocks_library[nume_apel]["steps"], depth)
+                else:
+                    # Dacă nu e definită de noi, o lăsăm ca un apel normal (fallback)
+                    ET.SubElement(parent, "call", expression=f"{nume_apel}()")
+
+            # ... restul elif-urilor (output, if, while, etc.) rămân identice ...
+            elif s[0] == "output":
+                ET.SubElement(parent, "output", expression=s[1])
+            elif s[0] == "if":
+                if_node = ET.SubElement(parent, "if", expression=s[1])
+                build_xml(ET.SubElement(if_node, "then"), s[2], depth)
+                build_xml(ET.SubElement(if_node, "else"), s[3], depth)
+
+    # --- 3. PROCESĂM SPRITE-UL PRINCIPAL ---
+    for target in data["targets"]:
+        if not target["isStage"]:
+            blocks = target["blocks"]
+            start_id = next((id for id, b in blocks.items() if isinstance(b, dict) and b.get("opcode") == "event_whenflagclicked"), None)
+
+            if start_id:
+                steps, n_bool, n_in, v_f, l_f, m_d = parse_blocks(target, blocks, blocks[start_id].get("next"))
+
+                sprite_fn = "Sprite" + clean_name(target["name"])
+                func = ET.SubElement(root, "function", name=sprite_fn, type="None", variable="")
+                ET.SubElement(func, "parameters")
+                f_body = ET.SubElement(func, "body")
+
+                # COLECTĂM TOATE VARIABILELE (și cele din Main, și cele din Define-urile folosite)
+                toate_v = set(v_f)
+                toate_l = set(l_f)
+                for blk in custom_blocks_library.values():
+                    toate_v.update(blk["vars"])
+                    toate_l.update(blk["lists"])
+
+                # Declarăm totul la începutul Sprite-ului (pentru că acum totul e un singur flux)
+                for v in toate_v:
+                    ET.SubElement(f_body, "declare", name=v, type="Integer", array="False", size="")
+                for lst in toate_l:
+                    ET.SubElement(f_body, "declare", name=lst, type="Integer", array="True", size="500")
+                    ET.SubElement(f_body, "declare", name=f"idx{lst}", type="Integer", array="False", size="")
+
+                # Construim XML-ul (build_xml va face inlining-ul automat la întâlnirea "call")
+                build_xml(f_body, steps)
+                ET.SubElement(main_body, "call", expression=f"{sprite_fn}()")
+
+    # Salvare...
