@@ -3,12 +3,10 @@ import json
 import re
 import unicodedata
 
-
 def load_scratch(file_path):
     """Încarcă fișierul JSON din arhiva .sb3"""
     with zipfile.ZipFile(file_path, 'r') as z:
         return json.loads(z.read('project.json'))
-
 
 def clean_name(name):
     """

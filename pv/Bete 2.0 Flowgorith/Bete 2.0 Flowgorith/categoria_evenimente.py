@@ -1,7 +1,6 @@
 from categoria_utilitare import clean_name
 from categoria_operatori import get_val
 
-
 def proceseaza_eveniment(b, target, blocks):
     op = b["opcode"]
     inputs = b.get("inputs", {})
@@ -15,7 +14,7 @@ def proceseaza_eveniment(b, target, blocks):
         nume_mesaj = clean_name(msg_val.replace('"', ''))
 
         # Returnăm apelul FĂRĂ underscore, pentru a se potrivi cu funcțiile generate în main.py
-        return ("output", f"Mesaj{nume_mesaj}")
+        return ("call", f"Mesaj{nume_mesaj}")
 
     # --- ALTE EVENIMENTE (SIMULATE PRIN OUTPUT PENTRU LOGICĂ) ---
     elif op == "event_whenkeypressed":

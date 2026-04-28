@@ -43,7 +43,7 @@ def make_fprg(data, out_file):
     ET.SubElement(main_func, "parameters")
     main_body = ET.SubElement(main_func, "body")
 
-    loop_vars = ["i", "j", "k", "l"]
+    loop_vars = ["indexi", "indexj", "indexk", "indexl"]
     all_steps = []
     g_vars = set()
     g_lists = set()
@@ -53,11 +53,11 @@ def make_fprg(data, out_file):
     for target in data["targets"]:
         # Extragem variabilele definite în meniul Scratch
         if "variables" in target:
-            for v_id, v_info in target["variables"].items():
+            for _, v_info in target["variables"].items():
                 g_vars.add(clean_name(v_info[0]))
         # Extragem listele
         if "lists" in target:
-            for l_id, l_info in target["lists"].items():
+            for _, l_info in target["lists"].items():
                 g_lists.add(clean_name(l_info[0]))
 
     # --- 2. COLECTARE LOGICĂ DIN TOATE PERSONAJELE (SPRITES) ---
@@ -65,7 +65,7 @@ def make_fprg(data, out_file):
         blocks = target["blocks"]
         
         # A. Căutăm STEAGUL VERDE (Punctul de start principal)
-        for b_id, b in blocks.items():
+        for _, b in blocks.items():
             if isinstance(b, dict) and b.get("opcode") == "event_whenflagclicked":
                 res = parse_blocks(target, blocks, b.get("next"))
                 all_steps.extend(res[0])
@@ -73,7 +73,7 @@ def make_fprg(data, out_file):
                 g_vars.update(res[3])
 
         # B. Căutăm CLONELE (When I start as a clone)
-        for b_id, b in blocks.items():
+        for _, b in blocks.items():
             if isinstance(b, dict) and b.get("opcode") == "control_start_as_clone":
                 all_steps.append(("output", f'"--- START CLONA: {target["name"]} ---"'))
                 res = parse_blocks(target, blocks, b.get("next"))
@@ -81,7 +81,7 @@ def make_fprg(data, out_file):
                 n_bool |= res[1]; n_in |= res[2]; m_depth = max(m_depth, res[5]); g_vars.update(res[3])
 
         # C. Căutăm MESAJELE (When I receive broadcast)
-        for b_id, b in blocks.items():
+        for _, b in blocks.items():
             if isinstance(b, dict) and b.get("opcode") == "event_whenbroadcastreceived":
                 msg_val = b["fields"]["BROADCAST_OPTION"][0]
                 all_steps.append(("output", f'"--- MESAJ PRIMIT: {msg_val} ---"'))
